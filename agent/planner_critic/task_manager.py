@@ -5,6 +5,7 @@ from collections import OrderedDict
 
 class TaskManager:
     def __init__(self, name, parent=None):
+        #初始化任务管理器
         self.name = name
         self.is_completed = False
         self.subtasks = OrderedDict()
@@ -13,29 +14,34 @@ class TaskManager:
         self.parent = parent
         self.record = {}
 
+    #添加子任务
     def add_subtasks(self, subtask_names):
         for subtask_name in subtask_names:
             subtask = TaskManager(subtask_name, parent=self)
             self.subtasks[subtask_name] = subtask
             self.subtasks_list.append(subtask)
 
+    #获取当前子任务
     def current_subtask(self):
         if self.current_subtask_index < len(self.subtasks_list):
             return self.subtasks_list[self.current_subtask_index]
         else:
             return None
 
+    #检查任务是否完成
     def check_completion(self):
         if all(subtask.is_completed for subtask in self.subtasks_list):
             self.is_completed = True
             if self.parent:
                 self.parent.check_completion()
 
+    #执行任务
     def execute_task(self):
         print(f"Executing task: {self.name}")
         if not self.subtasks_list:  # If the task is a leaf node, execute it
             self.is_completed = True
 
+    #列出未完成的任务
     def list_uncompleted_tasks(self):
         uncompleted_tasks = []
         if not self.is_completed:
@@ -44,6 +50,7 @@ class TaskManager:
             uncompleted_tasks.extend(subtask.list_uncompleted_tasks())
         return uncompleted_tasks
 
+    #获取下一个任务
     def next(self, recursive=True):
         if recursive:
             # this model will skip the task node
@@ -51,12 +58,14 @@ class TaskManager:
         else:
             return self.next_node()
     
+    #递归获取下一个任务
     def next_recursive(self):
         next_node = self.next_node()
         if next_node:
             return self.skip_task_node(next_node)
         return None
         
+    #获取下一个任务
     def next_node(self):
         while self.current_subtask_index < len(self.subtasks_list):
             if not self.subtasks_list[self.current_subtask_index].is_completed:
@@ -76,6 +85,7 @@ class TaskManager:
 
         return None  # If reached here, all tasks are complete
     
+    #跳过任务节点
     def skip_task_node(self, node):
         if node:
             if "Subtask" not in node.name:
@@ -85,10 +95,12 @@ class TaskManager:
         else:
             return None
 
+    #重新规划
     def replan(self):
         pass
 
 
+#将有序字典转换为任务树
 def ordered_dict_to_tasks(task_dict, parent=None):
     if not task_dict:
         return None
@@ -103,6 +115,7 @@ def ordered_dict_to_tasks(task_dict, parent=None):
     return root
 
 
+#解析任务
 def parse_tasks(input_str):
     lines = input_str.strip().split('\n')
     root = OrderedDict()
@@ -125,6 +138,7 @@ def parse_tasks(input_str):
     return root
 
 
+#将文本步骤转换为迭代器
 def turn_text_steps_to_iter(plan):
     parsed_tasks = parse_tasks(plan)
     root_task = ordered_dict_to_tasks(parsed_tasks)
@@ -133,6 +147,7 @@ def turn_text_steps_to_iter(plan):
     return parsed_tasks, current_task, root_task
 
 
+#编码任务
 def encode_task(task):
     if isinstance(task, str):
         return task
@@ -140,6 +155,7 @@ def encode_task(task):
         return base64.b64encode(pickle.dumps(task)).decode('utf-8')
 
 
+#解码任务
 def decode_task(task):
     try:
         return pickle.loads(base64.b64decode(task)) 

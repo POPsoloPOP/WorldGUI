@@ -173,9 +173,9 @@ Software Usage Tips:
 Output format:
 ```output
 <Code>
-Now let's complete the code to achieve the command:
+Now lets complete the code to achieve the command:
 from pyautogui import click, write, hotkey, press, scroll, keyDown, keyUp, doubleClick
-# Don't import any other libraries and functions
+# Dont import any other libraries and functions
 </Code>
 <Reason>
 Please give your reasoning steps...
