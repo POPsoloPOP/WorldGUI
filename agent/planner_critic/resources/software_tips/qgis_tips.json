@@ -1,0 +1,13 @@
+{
+    "qgis": [
+        "When selecting layers in the Layers panel, click on the layer name, not the checkbox.",
+        "To add a new layer, use the 'Add Layer' button in the toolbar, not the menu.",
+        "When editing features, first select the layer, then click the 'Toggle Editing' button.",
+        "To save changes, use 'Save Layer Edits' button, not Ctrl+S.",
+        "When using the attribute table, click on the row number to select entire rows.",
+        "For spatial operations, use the Processing Toolbox rather than individual tools.",
+        "When creating new features, use the digitizing toolbar buttons, not keyboard shortcuts.",
+        "Before clicking 'Send Request' for a new query, first clear every existing layer: in the Layers panel right-click each layer, choose 'Remove Layer…', confirm 'OK', repeat until the panel is empty, and only then press 'Send Request'.",
+        "After a map resource has been downloaded and appears in the Browser panel, locate 'OpenStreetMap', right-click it and choose 'Add Layer to Project'. Once the layer is successfully added, switch to the Layers panel, right-click 'OpenStreetMap' again and select 'Move to Bottom' so the basemap stays beneath all other layers."
+    ]
+}
