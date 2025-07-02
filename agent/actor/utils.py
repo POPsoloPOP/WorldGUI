@@ -100,16 +100,18 @@ def compress_gui(com_gui):
             for row in panel_item.get("elements", []):
                 if type(row) is list:
                     for element in row:
-                        try:
-                            element['position'] = [int((element['rectangle'][0] + element['rectangle'][2]) / 2),
-                                                   int((element['rectangle'][1] + element['rectangle'][3]) / 2)]
-                            del element['rectangle']
-                        except TypeError:
-                            print(element, row, panel_item)
+                        if 'rectangle' in element:
+                            try:
+                                element['position'] = [int((element['rectangle'][0] + element['rectangle'][2]) / 2),
+                                                       int((element['rectangle'][1] + element['rectangle'][3]) / 2)]
+                                del element['rectangle']
+                            except TypeError:
+                                print(element, row, panel_item)
                 elif type(row) is dict:
-                    row['position'] = [int((row['rectangle'][0] + row['rectangle'][2]) / 2),
-                                       int((row['rectangle'][1] + row['rectangle'][3]) / 2)]
-                    del row['rectangle']
+                    if 'rectangle' in row:
+                        row['position'] = [int((row['rectangle'][0] + row['rectangle'][2]) / 2),
+                                           int((row['rectangle'][1] + row['rectangle'][3]) / 2)]
+                        del row['rectangle']
 
     return com_gui
 
