@@ -57,50 +57,109 @@ def test_qgis():
     #print(json.dumps(gui_results, indent=2, ensure_ascii=False))
 
     # 画图
-    def draw_rectangles_on_image(screenshot_path, gui_results, save_path):
-        img = cv2.imread(screenshot_path)
-        for window_name, window_data in gui_results.items():
-            for panel_item in window_data:
-                for row in panel_item.get("elements", []):
-                    if isinstance(row, list):
-                        for element in row:
-                            rect = element.get('rectangle')
-                            if rect:
-                                cv2.rectangle(img, (rect[0], rect[1]), (rect[2], rect[3]), (0, 0, 255), 3)
-                    elif isinstance(row, dict):
-                        rect = row.get('rectangle')
-                        if rect:
-                            cv2.rectangle(img, (rect[0], rect[1]), (rect[2], rect[3]), (0, 0, 255), 3)
-        cv2.imwrite(save_path, img)
+   # def draw_rectangles_on_image(screenshot_path, gui_results, save_path):
+   #     img = cv2.imread(screenshot_path)
+   #     for window_name, window_data in gui_results.items():
+   #         for panel_item in window_data:
+   #             for row in panel_item.get("elements", []):
+   #                 if isinstance(row, list):
+   #                     for element in row:
+   #                         rect = element.get('rectangle')
+   #                         if rect:
+   #                             cv2.rectangle(img, (rect[0], rect[1]), (rect[2], rect[3]), (0, 0, 255), 3)
+   #                 elif isinstance(row, dict):
+   #                     rect = row.get('rectangle')
+   #                     if rect:
+   #                             cv2.rectangle(img, (rect[0], rect[1]), (rect[2], rect[3]), (0, 0, 255), 3)
+   #         cv2.imwrite(save_path, img)
 
-    draw_rectangles_on_image(screenshot_path, gui_results, "debug_with_boxes.png")
+   # draw_rectangles_on_image(screenshot_path, gui_results, "debug_with_boxes.png")
 
     # 画小元素的中心点
-    def draw_element_positions(screenshot_path, gui_results, save_path):
-        img = cv2.imread(screenshot_path)
-        for window_name, window_data in gui_results.items():
-            for panel_item in window_data:
-                for row in panel_item.get("elements", []):
-                    if isinstance(row, list):
-                        for element in row:
-                            pos = element.get('position')
-                            if pos:
-                                cv2.circle(img, (pos[0], pos[1]), 6, (0, 255, 0), -1)
-                    elif isinstance(row, dict):
-                        pos = row.get('position')
-                        if pos:
-                            cv2.circle(img, (pos[0], pos[1]), 6, (0, 255, 0), -1)
-        cv2.imwrite(save_path, img)
+   # def draw_element_positions(screenshot_path, gui_results, save_path):
+   #     img = cv2.imread(screenshot_path)
+   #     for window_name, window_data in gui_results.items():
+   #         for panel_item in window_data:
+   #             for row in panel_item.get("elements", []):
+   #                 if isinstance(row, list):
+   #                     for element in row:
+   #                         pos = element.get('position')
+   #                         if pos:
+   #                             cv2.circle(img, (pos[0], pos[1]), 6, (0, 255, 0), -1)
+   #                 elif isinstance(row, dict):
+   #                     pos = row.get('position')
+    #                  if pos:
+   #                         cv2.circle(img, (pos[0], pos[1]), 6, (0, 255, 0), -1)
+   #         cv2.imwrite(save_path, img)
 
-    draw_element_positions(screenshot_path, gui_results, "debug_with_points.png")
+   # draw_element_positions(screenshot_path, gui_results, "debug_with_points.png")
 
     # 测试计划生成
-    query = "Add a new vector layer to the project"
-    gui_info = compress_gui(gui_results)
-    gui_info = "\n".join(format_gui(gui_info))
+    query = "Please add the file 'G:\\BYXG-OUTPUT\\boudary_in_Liverpool.gpkg' and the OpenStreetMap basemap to the Layers panel."
+   # gui_info = compress_gui(gui_results)
+   # gui_info = "\n".join(format_gui(gui_info))
     
     plan = autopc.run_planner(query, software_name, screenshot_path, gui_info, "")
     print("生成的计划:", plan)
+ # === Actor自动执行环节 ===
+    maximum_step = 10
+    state = '<Continue>'
+    code = ""
+    last_screenshot_path = ""
+    critic_count = 0
 
+    for idx in range(maximum_step):
+        meta_data, screenshot_path = get_screenshot(software_name)
+        print("===Current task===", "Index:",  idx, state)
+        print(autopc.current_task.name.strip())
+        print("Before next(), current_task:", autopc.current_task.name)
+        code, state, current_task = autopc.run_step(
+            state,
+            code,
+            autopc.current_task, 
+            meta_data, 
+            last_screenshot_path,
+            screenshot_path, 
+            software_name,
+            if_screenshot=True
+        )
+        # 执行 actor 生成的 pyautogui 代码
+        if code != "":
+            focus_software(software_name)
+            exec(code)
+            last_screenshot_path = screenshot_path
+
+        if state == '<Continue>':
+            state = '<Critic>'
+        elif state == '<Next>':
+            autopc.current_task = autopc.current_task.next()
+            if autopc.current_task:
+                state = '<Continue>'
+                code = ""
+                critic_count = 0
+                print("After next(), current_task:", autopc.current_task.name)
+            else:
+                state = '<Finished>'
+                print("===Current task===", "Index:",  idx, state)
+                break
+        if state == '<Critic>':
+            critic_count += 1
+        if critic_count > 3:
+            autopc.current_task = autopc.current_task.next()
+            if autopc.current_task:
+                state = '<Continue>'
+                code = ""
+                critic_count = 0
+                print("After next(), current_task:", autopc.current_task.name)
+            else:
+                state = '<Finished>'
+                print('current index', idx, state)
+                break
+
+    # 保存最终截图
+    new_screenpath = os.path.join(saved_folder, software_name, f"{project_id}_end.png")
+    print('Save result in', new_screenpath)
+    os.makedirs(os.path.dirname(new_screenpath), exist_ok=True)
+    shutil.copy(screenshot_path, new_screenpath)
 if __name__ == "__main__":
     test_qgis()

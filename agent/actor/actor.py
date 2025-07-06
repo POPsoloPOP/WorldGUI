@@ -238,7 +238,7 @@ Please give your reasoning steps...
         # load files and merge them
         software_tips = {}
         for file in software_tips_files:
-            with open(file, 'r') as f:
+            with open(file, 'r', encoding='utf-8') as f:
                 software_tips.update(json.load(f))
                 
         return software_tips

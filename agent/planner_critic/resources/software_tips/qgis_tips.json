@@ -1,13 +1,14 @@
 {
     "qgis": [
+        "When you need to add the OpenStreetMap (OSM) basemap, do not use the Web menu or any plugins. Instead, directly locate 'OpenStreetMap' in the Browser panel and drag it into the Layers panel to add it.",
+        "When adding a new layer from the Browser panel, always prefer to use drag-and-drop into the Layers panel rather than right-clicking to add.",
+        "If a layer already exists in the Layers panel and you need to adjust its order, use right-click and select 'Move to Top' or 'Move to Bottom' as appropriate.",
         "When selecting layers in the Layers panel, click on the layer name, not the checkbox.",
         "To add a new layer, use the 'Add Layer' button in the toolbar, not the menu.",
         "When editing features, first select the layer, then click the 'Toggle Editing' button.",
         "To save changes, use 'Save Layer Edits' button, not Ctrl+S.",
         "When using the attribute table, click on the row number to select entire rows.",
         "For spatial operations, use the Processing Toolbox rather than individual tools.",
-        "When creating new features, use the digitizing toolbar buttons, not keyboard shortcuts.",
-        "Before clicking 'Send Request' for a new query, first clear every existing layer: in the Layers panel right-click each layer, choose 'Remove Layer…', confirm 'OK', repeat until the panel is empty, and only then press 'Send Request'.",
-        "After a map resource has been downloaded and appears in the Browser panel, locate 'OpenStreetMap', right-click it and choose 'Add Layer to Project'. Once the layer is successfully added, switch to the Layers panel, right-click 'OpenStreetMap' again and select 'Move to Bottom' so the basemap stays beneath all other layers."
+        "When creating new features, use the digitizing toolbar buttons, not keyboard shortcuts."
     ]
 }

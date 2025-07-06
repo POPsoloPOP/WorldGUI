@@ -1,0 +1,14 @@
+{
+    "qgis": [
+        "To add a file as a layer, locate the file in the Browser panel and drag it with the left mouse button into the Layers panel. There is no need to expand all subfolders.",
+        "Only add a basemap (such as OpenStreetMap) if the user's request or task is related to geographic data visualization, map display, or requires a background map. If the user's request is not related to map or geographic data, skip the basemap import step.",
+        "To add OpenStreetMap as a basemap, right-click 'OpenStreetMap' in the Browser panel, select 'Add Layer to Project', then right-click it in the Layers panel and select 'Move to Bottom'.",
+        "When clearing all layers before a new query, right-click each layer in the Layers panel, select 'Remove Layer…', and click 'OK' in the confirmation dialog. Repeat until the panel is empty.",
+        "When clicking on a folder or file in the Browser panel, use moveTo({x}, {y}, duration=1) before click({x}, {y}) to ensure accuracy.",
+        "If you need to expand a folder, click the arrow icon next to the folder name. The arrow will point downward when the folder is expanded.",
+        "When toggling editing mode for a layer, click the 'Toggle Editing' button in the toolbar, not the layer context menu.",
+        "For attribute table operations, click on row numbers (the leftmost column) to select entire rows.",
+        "When using the Processing Toolbox, click on the toolbox icon first, then select the specific tool you need.",
+        "For digitizing new features, use the digitizing toolbar buttons with precise coordinates, not keyboard shortcuts."
+    ]
+} 
