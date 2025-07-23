@@ -1,5 +1,10 @@
 {
     "qgis": [
+        "When executing tasks, do not over-guess or infer the positions of GUI elements. Always perform clicks and operations strictly based on the actual positions detected from the GUI capture.",
+        "do not use the icon in toolbar to add layers, always use the Browser panel to add layers.",
+        "Geographic data is always in the BYXG-OUTPUT folder, so we should always need to nagivate to the BYXG-OUTPUT folder to add layers.",
+        "When searching for and adding layer resources, always locate the target folder or disk (e.g., G: drive) from the Browser panel. Do not use the toolbar or other menu tools to add layers.",
+        "When starting a new task in QGIS, clear all data in the Layers panel to ensure that newly added geographic data can be correctly located and displayed. Right-click each layer, select 'Remove Layer…', and wait for the dialog to appear,use GUI parser to get the position of the 'OK' button and then click the 'OK' button to confirm.",
         "When you need to add the OpenStreetMap (OSM) basemap, do not use the Web menu or any plugins. Instead, directly locate 'OpenStreetMap' in the Browser panel and drag it into the Layers panel to add it.",
         "When adding a new layer from the Browser panel, always prefer to use drag-and-drop into the Layers panel rather than right-clicking to add.",
         "If a layer already exists in the Layers panel and you need to adjust its order, use right-click and select 'Move to Top' or 'Move to Bottom' as appropriate.",

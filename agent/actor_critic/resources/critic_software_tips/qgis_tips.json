@@ -1,5 +1,6 @@
 {
     "qgis": [
+        "when a folder in the browser did not show expanede, use doubleclick to expand the folder",
         "When a layer appears in the Layers panel, it has been successfully added to the project.",
         "When the 'Toggle Editing' button shows a red background, the layer is in editing mode.",
         "When features appear in the attribute table, they have been successfully created or selected.",

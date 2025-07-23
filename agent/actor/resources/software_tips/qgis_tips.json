@@ -1,5 +1,6 @@
 {
     "qgis": [
+        "Before performing the current task, clear all layers in the Layers panel to ensure that newly added geographic data can be correctly located and displayed. Right-click each layer, select 'Remove Layer…', and confirm.",
         "To add a file as a layer, locate the file in the Browser panel and drag it with the left mouse button into the Layers panel. There is no need to expand all subfolders.",
         "Only add a basemap (such as OpenStreetMap) if the user's request or task is related to geographic data visualization, map display, or requires a background map. If the user's request is not related to map or geographic data, skip the basemap import step.",
         "To add OpenStreetMap as a basemap, right-click 'OpenStreetMap' in the Browser panel, select 'Add Layer to Project', then right-click it in the Layers panel and select 'Move to Bottom'.",

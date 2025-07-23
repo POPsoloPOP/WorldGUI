@@ -167,15 +167,15 @@ General Rules:
 
 Software Usage Tips:
 {tips}
-
+6. All generated code MUST include the following import statement at the top:
+   from pyautogui import click, write, hotkey, press, scroll, keyDown, keyUp, doubleClick, moveTo, mouseDown, mouseUp
 ==============================
 
 Output format:
 ```output
 <Code>
-Now lets complete the code to achieve the command:
-from pyautogui import click, write, hotkey, press, scroll, keyDown, keyUp, doubleClick
-# Dont import any other libraries and functions
+from pyautogui import click, write, hotkey, press, scroll, keyDown, keyUp, doubleClick, moveTo, mouseDown, mouseUp
+# Your code here...
 </Code>
 <Reason>
 Please give your reasoning steps...

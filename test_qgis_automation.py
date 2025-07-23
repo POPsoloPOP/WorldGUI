@@ -76,7 +76,7 @@ def test_qgis():
    # draw_rectangles_on_image(screenshot_path, gui_results, "debug_with_boxes.png")
 
     # 画小元素的中心点
-   # def draw_element_positions(screenshot_path, gui_results, save_path):
+    #   def draw_element_positions(screenshot_path, gui_results, save_path):
    #     img = cv2.imread(screenshot_path)
    #     for window_name, window_data in gui_results.items():
    #         for panel_item in window_data:
@@ -88,21 +88,21 @@ def test_qgis():
    #                             cv2.circle(img, (pos[0], pos[1]), 6, (0, 255, 0), -1)
    #                 elif isinstance(row, dict):
    #                     pos = row.get('position')
-    #                  if pos:
+   #                     if pos:
    #                         cv2.circle(img, (pos[0], pos[1]), 6, (0, 255, 0), -1)
    #         cv2.imwrite(save_path, img)
 
    # draw_element_positions(screenshot_path, gui_results, "debug_with_points.png")
 
     # 测试计划生成
-    query = "Please add the file 'G:\\BYXG-OUTPUT\\boudary_in_Liverpool.gpkg' and the OpenStreetMap basemap to the Layers panel."
+    query = "Please add the data file at 'G:\\BYXG-OUTPUT\\boudary_in_London.gpkg'."
    # gui_info = compress_gui(gui_results)
    # gui_info = "\n".join(format_gui(gui_info))
     
     plan = autopc.run_planner(query, software_name, screenshot_path, gui_info, "")
     print("生成的计划:", plan)
  # === Actor自动执行环节 ===
-    maximum_step = 10
+    maximum_step =100
     state = '<Continue>'
     code = ""
     last_screenshot_path = ""
@@ -124,9 +124,27 @@ def test_qgis():
             if_screenshot=True
         )
         # 执行 actor 生成的 pyautogui 代码
+        pyautogui_import = "from pyautogui import click, write, hotkey, press, scroll, keyDown, keyUp, doubleClick, moveTo, mouseDown, mouseUp"
+
         if code != "":
             focus_software(software_name)
-            exec(code)
+            try:
+                # 检查是否包含Python代码块
+                if "```python" in code:
+                    python_code = code.split("```python")[1].split("```", 1)[0].strip()
+                elif "```" in code:
+                    python_code = code.split("```", 1)[1].split("```", 1)[0].strip()
+                else:
+                    python_code = code
+
+                # 如果没有import语句，则自动补全
+                if "moveTo" in python_code and "import moveTo" not in python_code and "from pyautogui" not in python_code:
+                    python_code = pyautogui_import + "\n" + python_code
+
+                exec(python_code)
+            except Exception as e:
+                print(f"执行代码时出错: {e}")
+                print(f"问题代码: {python_code}")
             last_screenshot_path = screenshot_path
 
         if state == '<Continue>':
