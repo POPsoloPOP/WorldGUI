@@ -22,8 +22,11 @@ class StepCheck:
 
     def __init__(self, lmm="gpt-4o-2024-08-06"):
         super(StepCheck, self).__init__()
-        self.lmm =lmm
+        self.lmm = lmm
         self.software_tips = self.load_software_tips()
+        
+        # 新增：动态监控器
+        self.execution_monitor = ExecutionMonitor()
 
     def __call__(
         self,
@@ -44,7 +47,6 @@ class StepCheck:
             current_task: The current task to be processed.
             gui: Current state of the GUI.
             input_image: An optional screenshot used for updating GUI state.
-            history: A list tracking the history of executed tasks and interactions.
             error_message: An optional error message for adjusting task plans.
             next_step: Suggested next step if adjustments are needed.
             pre_act_success_flag: Flag indicating if the previous action was successful.
@@ -59,8 +61,27 @@ class StepCheck:
         # Task Info
         main_goal, finished_tasks, current_task_text, next_task = self.get_task_details(current_task, history)
 
-
         tips = self.get_software_tips(self.software_tips, software_name.lower().replace(' ', '_'))
+
+        # 新增：执行过程中的动态监控
+        if screenshot_path and parsed_screenshot:
+            monitoring_result = self.execution_monitor.monitor_execution_context(
+                current_step=current_task_text,
+                screenshot_path=screenshot_path,
+                parsed_screenshot=parsed_screenshot,
+                software_name=software_name
+            )
+            
+            # 如果检测到需要重新思考的情况
+            if monitoring_result.get('rethinking_needed'):
+                return self.trigger_rethinking_workflow(
+                    monitoring_result=monitoring_result,
+                    current_task=current_task,
+                    parsed_screenshot=parsed_screenshot,
+                    screenshot_path=screenshot_path,
+                    software_name=software_name,
+                    tips=tips
+                )
 
         # step checker before run the actor
         # initial values
@@ -96,26 +117,58 @@ class StepCheck:
             elif '#Cannot confirm' in critic_feedback and iter_idx < 2:
                 
                 if parsed_screenshot:
-                    compress_gui = self.compress_and_format_gui(parsed_screenshot)
+                    compressed_gui = self.compress_and_format_gui(parsed_screenshot)
                     new_screenshot_path = run_locateregion(
-                        LMM=self.lmm,
-                        software_name=software_name,
-                        current_task=current_task_text,
-                        gui_info=compress_gui,
-                        screenshot_path=screenshot_path)
-                else: # for claude computer use that has the actor ability
-                    pass
-
-                stepcheck_decision = '<Retry>' # current do nothing
-            elif '<Pass>' in critic_feedback:
-                stepcheck_decision = '<Finished>'
+                        compressed_gui, 
+                        current_task_text, 
+                        software_name, 
+                        new_screenshot_path
+                    )
+                    iter_idx += 1
+                else:
+                    stepcheck_decision = '<Continue>'
             else:
                 stepcheck_decision = '<Continue>'
 
-
-            iter_idx += 1
-        
         return stepcheck_decision, current_task, history
+
+    # 新增：触发重新思考工作流
+    def trigger_rethinking_workflow(self, monitoring_result, current_task, parsed_screenshot, screenshot_path, software_name, tips):
+        """触发重新思考工作流"""
+        print(f"🔄 Step-Check 检测到需要重新思考: {monitoring_result['reason']}")
+        
+        # 分析当前界面状态
+        current_gui_state = self.analyze_current_interface(parsed_screenshot, screenshot_path)
+        
+        # 生成重新思考后的任务调整建议
+        task_adjustment = self.generate_task_adjustment(
+            original_task=current_task,
+            monitoring_result=monitoring_result,
+            current_gui_state=current_gui_state
+        )
+        
+        # 返回重新思考状态
+        return "<Rethink>", task_adjustment, []
+
+    # 新增：分析当前界面状态
+    def analyze_current_interface(self, parsed_screenshot, screenshot_path):
+        """分析当前界面状态"""
+        if parsed_screenshot:
+            return self.compress_and_format_gui(parsed_screenshot)
+        return ""
+
+    # 新增：生成任务调整建议
+    def generate_task_adjustment(self, original_task, monitoring_result, current_gui_state):
+        """基于监控结果生成任务调整建议"""
+        adjustment = {
+            'original_task': original_task.name if hasattr(original_task, 'name') else str(original_task),
+            'rethinking_reason': monitoring_result['reason'],
+            'detected_issues': monitoring_result.get('detected_issues', []),
+            'suggested_actions': monitoring_result.get('suggested_actions', []),
+            'current_context': current_gui_state
+        }
+        
+        return adjustment
 
     @staticmethod
     def extract_task(result, label):
@@ -323,4 +376,676 @@ Note:
     def get_software_tips(self, target, software_name):        
         hints = "\n".join(target.get(software_name, [""]))
         return hints
+
+
+class ExecutionMonitor:
+    """执行过程监控器，用于检测需要重新思考的情况"""
+    
+    def __init__(self):
+        self.monitoring_rules = {
+            'qgis': QGISMonitoringRules(),
+            'word': WordMonitoringRules(),
+            'powerpoint': PowerPointMonitoringRules(),
+            'excel': ExcelMonitoringRules(),
+            'default': DefaultMonitoringRules()
+        }
+    
+    def monitor_execution_context(self, current_step, screenshot_path, parsed_screenshot, software_name):
+        """监控执行过程中的上下文变化"""
+        try:
+            # 获取对应软件的监控规则
+            monitoring_rules = self.monitoring_rules.get(software_name.lower(), self.monitoring_rules['default'])
+            
+            # 执行监控检查
+            monitoring_result = monitoring_rules.check_execution_context(
+                current_step=current_step,
+                screenshot_path=screenshot_path,
+                parsed_screenshot=parsed_screenshot
+            )
+            
+            return monitoring_result
+            
+        except Exception as e:
+            print(f"Execution monitoring error: {e}")
+            return {
+                'rethinking_needed': False,
+                'reason': f"监控过程出错: {e}",
+                'detected_issues': [],
+                'suggested_actions': []
+            }
+
+
+class QGISMonitoringRules:
+    """QGIS软件的监控规则"""
+    
+    def check_execution_context(self, current_step, screenshot_path, parsed_screenshot):
+        """检查QGIS执行上下文"""
+        issues = []
+        suggested_actions = []
+        
+        # 检查是否有弹框出现
+        if self.detect_dialog_appearance(screenshot_path):
+            issues.append("检测到弹框出现")
+            suggested_actions.append("需要与弹框进行交互")
+        
+        # 检查界面状态是否异常
+        if self.detect_interface_anomaly(parsed_screenshot):
+            issues.append("检测到界面状态异常")
+            suggested_actions.append("需要重新分析界面状态")
+        
+        # 判断是否需要重新思考
+        rethinking_needed = len(issues) > 0
+        reason = "; ".join(issues) if issues else "执行正常"
+        
+        return {
+            'rethinking_needed': rethinking_needed,
+            'reason': reason,
+            'detected_issues': issues,
+            'suggested_actions': suggested_actions
+        }
+    
+    def detect_dialog_appearance(self, screenshot_path):
+        """检测弹框出现 - 纯图像对比版本"""
+        try:
+            import cv2
+            import numpy as np
+        except ImportError:
+            print("警告: 缺少OpenCV库，弹框检测功能受限")
+            return False
+        
+        try:
+            # 读取图像
+            image = cv2.imread(screenshot_path)
+            if image is None:
+                return False
+            
+            # 转换为灰度图
+            gray = cv2.imread(screenshot_path, cv2.IMREAD_GRAYSCALE)
+            
+            # 弹框检测参数
+            min_dialog_area = 2000
+            max_dialog_area = 100000
+            central_margin = 0.15
+            
+            # 使用边缘检测找到可能的弹框轮廓
+            edges = cv2.Canny(gray, 50, 150)
+            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            # 寻找符合弹框特征的轮廓
+            for contour in contours:
+                # 计算轮廓面积
+                area = cv2.contourArea(contour)
+                if area < min_dialog_area or area > max_dialog_area:
+                    continue
+                
+                # 获取边界矩形
+                x, y, w, h = cv2.boundingRect(contour)
+                height, width = image.shape[:2]
+                
+                # 位置过滤：弹框通常在屏幕中央，不在边缘
+                if (x > width * central_margin and y > height * central_margin and 
+                    x + w < width * (1 - central_margin) and y + h < height * (1 - central_margin)):
+                    
+                    # 形状过滤：弹框通常是矩形
+                    aspect_ratio = w / h
+                    if 0.5 <= aspect_ratio <= 3.0:
+                        
+                        # 检查轮廓的矩形度
+                        rect_area = w * h
+                        contour_area = area
+                        if contour_area / rect_area > 0.7:
+                            return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"QGIS弹框检测出错: {e}")
+            return False
+    
+    def detect_interface_anomaly(self, parsed_screenshot):
+        """检测界面状态异常"""
+        try:
+            if not parsed_screenshot:
+                return False
+            
+            # 检查是否有异常的元素状态
+            anomalies = []
+            
+            # 检查是否有错误提示
+            if isinstance(parsed_screenshot, dict):
+                # 检查文本元素中是否包含错误信息
+                if 'text_elements' in parsed_screenshot:
+                    for text_elem in parsed_screenshot['text_elements']:
+                        if isinstance(text_elem, dict) and 'text' in text_elem:
+                            text = text_elem['text'].lower()
+                            error_keywords = ['error', '错误', '失败', 'fail', '异常', 'exception']
+                            if any(keyword in text for keyword in error_keywords):
+                                anomalies.append(f"检测到错误信息: {text_elem['text']}")
+                
+                # 检查是否有异常的状态指示
+                if 'buttons' in parsed_screenshot:
+                    for button in parsed_screenshot['buttons']:
+                        if isinstance(button, dict) and 'state' in button:
+                            if button['state'] in ['disabled', 'error', 'warning']:
+                                anomalies.append(f"按钮状态异常: {button.get('text', 'Unknown')} - {button['state']}")
+                
+                # 检查是否有加载状态
+                if 'loading_indicators' in parsed_screenshot:
+                    if parsed_screenshot['loading_indicators']:
+                        anomalies.append("检测到加载状态")
+            
+            # 如果有异常，返回True
+            return len(anomalies) > 0
+            
+        except Exception as e:
+            print(f"QGIS界面状态异常检测出错: {e}")
+            return False
+
+
+class WordMonitoringRules:
+    """Word软件的监控规则"""
+    
+    def check_execution_context(self, current_step, screenshot_path, parsed_screenshot):
+        """检查Word执行上下文"""
+        issues = []
+        suggested_actions = []
+        
+        # 检查是否有弹框出现
+        if self.detect_dialog_appearance(screenshot_path):
+            issues.append("检测到弹框出现")
+            suggested_actions.append("需要与弹框进行交互")
+        
+        # 检查界面状态是否异常
+        if self.detect_interface_anomaly(parsed_screenshot):
+            issues.append("检测到界面状态异常")
+            suggested_actions.append("需要重新分析界面状态")
+        
+        # 判断是否需要重新思考
+        rethinking_needed = len(issues) > 0
+        reason = "; ".join(issues) if issues else "执行正常"
+        
+        return {
+            'rethinking_needed': rethinking_needed,
+            'reason': reason,
+            'detected_issues': issues,
+            'suggested_actions': suggested_actions
+        }
+    
+    def detect_dialog_appearance(self, screenshot_path):
+        """检测弹框出现 - 纯图像对比版本"""
+        try:
+            import cv2
+            import numpy as np
+        except ImportError:
+            print("警告: 缺少OpenCV库，弹框检测功能受限")
+            return False
+        
+        try:
+            # 读取图像
+            image = cv2.imread(screenshot_path)
+            if image is None:
+                return False
+            
+            # 转换为灰度图
+            gray = cv2.imread(screenshot_path, cv2.IMREAD_GRAYSCALE)
+            
+            # 弹框检测参数
+            min_dialog_area = 2000
+            max_dialog_area = 100000
+            central_margin = 0.15
+            
+            # 使用边缘检测找到可能的弹框轮廓
+            edges = cv2.Canny(gray, 50, 150)
+            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            # 寻找符合弹框特征的轮廓
+            for contour in contours:
+                # 计算轮廓面积
+                area = cv2.contourArea(contour)
+                if area < min_dialog_area or area > max_dialog_area:
+                    continue
+                
+                # 获取边界矩形
+                x, y, w, h = cv2.boundingRect(contour)
+                height, width = image.shape[:2]
+                
+                # 位置过滤：弹框通常在屏幕中央，不在边缘
+                if (x > width * central_margin and y > height * central_margin and 
+                    x + w < width * (1 - central_margin) and y + h < height * (1 - central_margin)):
+                    
+                    # 形状过滤：弹框通常是矩形
+                    aspect_ratio = w / h
+                    if 0.5 <= aspect_ratio <= 3.0:
+                        
+                        # 检查轮廓的矩形度
+                        rect_area = w * h
+                        contour_area = area
+                        if contour_area / rect_area > 0.7:
+                            return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"Word弹框检测出错: {e}")
+            return False
+    
+    def detect_interface_anomaly(self, parsed_screenshot):
+        """检测界面状态异常"""
+        try:
+            if not parsed_screenshot:
+                return False
+            
+            # 检查是否有异常的元素状态
+            anomalies = []
+            
+            # 检查是否有错误提示
+            if isinstance(parsed_screenshot, dict):
+                # 检查文本元素中是否包含错误信息
+                if 'text_elements' in parsed_screenshot:
+                    for text_elem in parsed_screenshot['text_elements']:
+                        if isinstance(text_elem, dict) and 'text' in text_elem:
+                            text = text_elem['text'].lower()
+                            error_keywords = ['error', '错误', '失败', 'fail', '异常', 'exception']
+                            if any(keyword in text for keyword in error_keywords):
+                                anomalies.append(f"检测到错误信息: {text_elem['text']}")
+                
+                # 检查是否有异常的状态指示
+                if 'buttons' in parsed_screenshot:
+                    for button in parsed_screenshot['buttons']:
+                        if isinstance(button, dict) and 'state' in button:
+                            if button['state'] in ['disabled', 'error', 'warning']:
+                                anomalies.append(f"按钮状态异常: {button.get('text', 'Unknown')} - {button['state']}")
+                
+                # 检查是否有加载状态
+                if 'loading_indicators' in parsed_screenshot:
+                    if parsed_screenshot['loading_indicators']:
+                        anomalies.append("检测到加载状态")
+            
+            # 如果有异常，返回True
+            return len(anomalies) > 0
+            
+        except Exception as e:
+            print(f"Word界面状态异常检测出错: {e}")
+            return False
+
+
+class PowerPointMonitoringRules:
+    """PowerPoint软件的监控规则"""
+    
+    def check_execution_context(self, current_step, screenshot_path, parsed_screenshot):
+        """检查PowerPoint执行上下文"""
+        issues = []
+        suggested_actions = []
+        
+        # 检查是否有弹框出现
+        if self.detect_dialog_appearance(screenshot_path):
+            issues.append("检测到弹框出现")
+            suggested_actions.append("需要与弹框进行交互")
+        
+        # 检查界面状态是否异常
+        if self.detect_interface_anomaly(parsed_screenshot):
+            issues.append("检测到界面状态异常")
+            suggested_actions.append("需要重新分析界面状态")
+        
+        # 判断是否需要重新思考
+        rethinking_needed = len(issues) > 0
+        reason = "; ".join(issues) if issues else "执行正常"
+        
+        return {
+            'rethinking_needed': rethinking_needed,
+            'reason': reason,
+            'detected_issues': issues,
+            'suggested_actions': suggested_actions
+        }
+    
+    def detect_dialog_appearance(self, screenshot_path):
+        """检测弹框出现 - 纯图像对比版本"""
+        try:
+            import cv2
+            import numpy as np
+        except ImportError:
+            print("警告: 缺少OpenCV库，弹框检测功能受限")
+            return False
+        
+        try:
+            # 读取图像
+            image = cv2.imread(screenshot_path)
+            if image is None:
+                return False
+            
+            # 转换为灰度图
+            gray = cv2.imread(screenshot_path, cv2.IMREAD_GRAYSCALE)
+            
+            # 弹框检测参数
+            min_dialog_area = 2000
+            max_dialog_area = 100000
+            central_margin = 0.15
+            
+            # 使用边缘检测找到可能的弹框轮廓
+            edges = cv2.Canny(gray, 50, 150)
+            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            # 寻找符合弹框特征的轮廓
+            for contour in contours:
+                # 计算轮廓面积
+                area = cv2.contourArea(contour)
+                if area < min_dialog_area or area > max_dialog_area:
+                    continue
+                
+                # 获取边界矩形
+                x, y, w, h = cv2.boundingRect(contour)
+                height, width = image.shape[:2]
+                
+                # 位置过滤：弹框通常在屏幕中央，不在边缘
+                if (x > width * central_margin and y > height * central_margin and 
+                    x + w < width * (1 - central_margin) and y + h < height * (1 - central_margin)):
+                    
+                    # 形状过滤：弹框通常是矩形
+                    aspect_ratio = w / h
+                    if 0.5 <= aspect_ratio <= 3.0:
+                        
+                        # 检查轮廓的矩形度
+                        rect_area = w * h
+                        contour_area = area
+                        if contour_area / rect_area > 0.7:
+                            return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"PowerPoint弹框检测出错: {e}")
+            return False
+    
+    def detect_interface_anomaly(self, parsed_screenshot):
+        """检测界面状态异常"""
+        try:
+            if not parsed_screenshot:
+                return False
+            
+            # 检查是否有异常的元素状态
+            anomalies = []
+            
+            # 检查是否有错误提示
+            if isinstance(parsed_screenshot, dict):
+                # 检查文本元素中是否包含错误信息
+                if 'text_elements' in parsed_screenshot:
+                    for text_elem in parsed_screenshot['text_elements']:
+                        if isinstance(text_elem, dict) and 'text' in text_elem:
+                            text = text_elem['text'].lower()
+                            error_keywords = ['error', '错误', '失败', 'fail', '异常', 'exception']
+                            if any(keyword in text for keyword in error_keywords):
+                                anomalies.append(f"检测到错误信息: {text_elem['text']}")
+                
+                # 检查是否有异常的状态指示
+                if 'buttons' in parsed_screenshot:
+                    for button in parsed_screenshot['buttons']:
+                        if isinstance(button, dict) and 'state' in button:
+                            if button['state'] in ['disabled', 'error', 'warning']:
+                                anomalies.append(f"按钮状态异常: {button.get('text', 'Unknown')} - {button['state']}")
+                
+                # 检查是否有加载状态
+                if 'loading_indicators' in parsed_screenshot:
+                    if parsed_screenshot['loading_indicators']:
+                        anomalies.append("检测到加载状态")
+            
+            # 如果有异常，返回True
+            return len(anomalies) > 0
+            
+        except Exception as e:
+            print(f"PowerPoint界面状态异常检测出错: {e}")
+            return False
+
+
+class ExcelMonitoringRules:
+    """Excel软件的监控规则"""
+    
+    def check_execution_context(self, current_step, screenshot_path, parsed_screenshot):
+        """检查Excel执行上下文"""
+        issues = []
+        suggested_actions = []
+        
+        # 检查是否有弹框出现
+        if self.detect_dialog_appearance(screenshot_path):
+            issues.append("检测到弹框出现")
+            suggested_actions.append("需要与弹框进行交互")
+        
+        # 检查界面状态是否异常
+        if self.detect_interface_anomaly(parsed_screenshot):
+            issues.append("检测到界面状态异常")
+            suggested_actions.append("需要重新分析界面状态")
+        
+        # 判断是否需要重新思考
+        rethinking_needed = len(issues) > 0
+        reason = "; ".join(issues) if issues else "执行正常"
+        
+        return {
+            'rethinking_needed': rethinking_needed,
+            'reason': reason,
+            'detected_issues': issues,
+            'suggested_actions': suggested_actions
+        }
+    
+    def detect_dialog_appearance(self, screenshot_path):
+        """检测弹框出现 - 纯图像对比版本"""
+        try:
+            import cv2
+            import numpy as np
+        except ImportError:
+            print("警告: 缺少OpenCV库，弹框检测功能受限")
+            return False
+        
+        try:
+            # 读取图像
+            image = cv2.imread(screenshot_path)
+            if image is None:
+                return False
+            
+            # 转换为灰度图
+            gray = cv2.imread(screenshot_path, cv2.IMREAD_GRAYSCALE)
+            
+            # 弹框检测参数
+            min_dialog_area = 2000
+            max_dialog_area = 100000
+            central_margin = 0.15
+            
+            # 使用边缘检测找到可能的弹框轮廓
+            edges = cv2.Canny(gray, 50, 150)
+            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            # 寻找符合弹框特征的轮廓
+            for contour in contours:
+                # 计算轮廓面积
+                area = cv2.contourArea(contour)
+                if area < min_dialog_area or area > max_dialog_area:
+                    continue
+                
+                # 获取边界矩形
+                x, y, w, h = cv2.boundingRect(contour)
+                height, width = image.shape[:2]
+                
+                # 位置过滤：弹框通常在屏幕中央，不在边缘
+                if (x > width * central_margin and y > height * central_margin and 
+                    x + w < width * (1 - central_margin) and y + h < height * (1 - central_margin)):
+                    
+                    # 形状过滤：弹框通常是矩形
+                    aspect_ratio = w / h
+                    if 0.5 <= aspect_ratio <= 3.0:
+                        
+                        # 检查轮廓的矩形度
+                        rect_area = w * h
+                        contour_area = area
+                        if contour_area / rect_area > 0.7:
+                            return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"Excel弹框检测出错: {e}")
+            return False
+    
+    def detect_interface_anomaly(self, parsed_screenshot):
+        """检测界面状态异常"""
+        try:
+            if not parsed_screenshot:
+                return False
+            
+            # 检查是否有异常的元素状态
+            anomalies = []
+            
+            # 检查是否有错误提示
+            if isinstance(parsed_screenshot, dict):
+                # 检查文本元素中是否包含错误信息
+                if 'text_elements' in parsed_screenshot:
+                    for text_elem in parsed_screenshot['text_elements']:
+                        if isinstance(text_elem, dict) and 'text' in text_elem:
+                            text = text_elem['text'].lower()
+                            error_keywords = ['error', '错误', '失败', 'fail', '异常', 'exception']
+                            if any(keyword in text for keyword in error_keywords):
+                                anomalies.append(f"检测到错误信息: {text_elem['text']}")
+                
+                # 检查是否有异常的状态指示
+                if 'buttons' in parsed_screenshot:
+                    for button in parsed_screenshot['buttons']:
+                        if isinstance(button, dict) and 'state' in button:
+                            if button['state'] in ['disabled', 'error', 'warning']:
+                                anomalies.append(f"按钮状态异常: {button.get('text', 'Unknown')} - {button['state']}")
+                
+                # 检查是否有加载状态
+                if 'loading_indicators' in parsed_screenshot:
+                    if parsed_screenshot['loading_indicators']:
+                        anomalies.append("检测到加载状态")
+            
+            # 如果有异常，返回True
+            return len(anomalies) > 0
+            
+        except Exception as e:
+            print(f"Excel界面状态异常检测出错: {e}")
+            return False
+
+
+class DefaultMonitoringRules:
+    """默认监控规则"""
+    
+    def check_execution_context(self, current_step, screenshot_path, parsed_screenshot):
+        """检查默认执行上下文"""
+        issues = []
+        suggested_actions = []
+        
+        # 检查是否有弹框出现
+        if self.detect_dialog_appearance(screenshot_path):
+            issues.append("检测到弹框出现")
+            suggested_actions.append("需要与弹框进行交互")
+        
+        # 检查界面状态是否异常
+        if self.detect_interface_anomaly(parsed_screenshot):
+            issues.append("检测到界面状态异常")
+            suggested_actions.append("需要重新分析界面状态")
+        
+        # 判断是否需要重新思考
+        rethinking_needed = len(issues) > 0
+        reason = "; ".join(issues) if issues else "执行正常"
+        
+        return {
+            'rethinking_needed': rethinking_needed,
+            'reason': reason,
+            'detected_issues': issues,
+            'suggested_actions': suggested_actions
+        }
+    
+    def detect_dialog_appearance(self, screenshot_path):
+        """检测弹框出现 - 纯图像对比版本"""
+        try:
+            import cv2
+            import numpy as np
+        except ImportError:
+            print("警告: 缺少OpenCV库，弹框检测功能受限")
+            return False
+        
+        try:
+            # 读取图像
+            image = cv2.imread(screenshot_path)
+            if image is None:
+                return False
+            
+            # 转换为灰度图
+            gray = cv2.imread(screenshot_path, cv2.IMREAD_GRAYSCALE)
+            
+            # 弹框检测参数
+            min_dialog_area = 2000
+            max_dialog_area = 100000
+            central_margin = 0.15
+            
+            # 使用边缘检测找到可能的弹框轮廓
+            edges = cv2.Canny(gray, 50, 150)
+            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            # 寻找符合弹框特征的轮廓
+            for contour in contours:
+                # 计算轮廓面积
+                area = cv2.contourArea(contour)
+                if area < min_dialog_area or area > max_dialog_area:
+                    continue
+                
+                # 获取边界矩形
+                x, y, w, h = cv2.boundingRect(contour)
+                height, width = image.shape[:2]
+                
+                # 位置过滤：弹框通常在屏幕中央，不在边缘
+                if (x > width * central_margin and y > height * central_margin and 
+                    x + w < width * (1 - central_margin) and y + h < height * (1 - central_margin)):
+                    
+                    # 形状过滤：弹框通常是矩形
+                    aspect_ratio = w / h
+                    if 0.5 <= aspect_ratio <= 3.0:
+                        
+                        # 检查轮廓的矩形度
+                        rect_area = w * h
+                        contour_area = area
+                        if contour_area / rect_area > 0.7:
+                            return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"默认弹框检测出错: {e}")
+            return False
+    
+    def detect_interface_anomaly(self, parsed_screenshot):
+        """检测界面状态异常"""
+        try:
+            if not parsed_screenshot:
+                return False
+            
+            # 检查是否有异常的元素状态
+            anomalies = []
+            
+            # 检查是否有错误提示
+            if isinstance(parsed_screenshot, dict):
+                # 检查文本元素中是否包含错误信息
+                if 'text_elements' in parsed_screenshot:
+                    for text_elem in parsed_screenshot['text_elements']:
+                        if isinstance(text_elem, dict) and 'text' in text_elem:
+                            text = text_elem['text'].lower()
+                            error_keywords = ['error', '错误', '失败', 'fail', '异常', 'exception']
+                            if any(keyword in text for keyword in error_keywords):
+                                anomalies.append(f"检测到错误信息: {text_elem['text']}")
+                
+                # 检查是否有异常的状态指示
+                if 'buttons' in parsed_screenshot:
+                    for button in parsed_screenshot['buttons']:
+                        if isinstance(button, dict) and 'state' in button:
+                            if button['state'] in ['disabled', 'error', 'warning']:
+                                anomalies.append(f"按钮状态异常: {button.get('text', 'Unknown')} - {button['state']}")
+                
+                # 检查是否有加载状态
+                if 'loading_indicators' in parsed_screenshot:
+                    if parsed_screenshot['loading_indicators']:
+                        anomalies.append("检测到加载状态")
+            
+            # 如果有异常，返回True
+            return len(anomalies) > 0
+            
+        except Exception as e:
+            print(f"默认界面状态异常检测出错: {e}")
+            return False
     

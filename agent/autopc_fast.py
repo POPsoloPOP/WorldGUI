@@ -45,7 +45,12 @@ class AutoPCFast:
 
         _, current_task, _ = turn_text_steps_to_iter(plan)
         self.current_task = current_task
-        print(f"Current_task: {self.current_task.name}")
+        if hasattr(self.current_task, 'name'):
+            print(f"Current_task: {self.current_task.name}")
+        elif isinstance(self.current_task, dict):
+            print(f"Current_task: {self.current_task.get('name', 'Unknown')}")
+        else:
+            print(f"Current_task: {str(self.current_task)}")
         self.update_state({"plan": plan, "current_task": current_task})
         return plan
     
@@ -74,7 +79,7 @@ class AutoPCFast:
         current_task = response.get("current_task", None)
         self.update_state(
             {"stepcheck_decision": stepcheck_decision, 
-             "current_task": current_task.name if current_task else None, 
+             "current_task": current_task.get('name') if isinstance(current_task, dict) else (current_task.name if current_task else None), 
              "history": history}
         )
         return stepcheck_decision, current_task, history
@@ -138,7 +143,7 @@ class AutoPCFast:
         history = response.get("history", [])
         self.update_state(
             {"code": code, 
-             "current_task": current_task.name if current_task else None, 
+             "current_task": current_task.get('name') if isinstance(current_task, dict) else (current_task.name if current_task else None), 
              "history": history}
         )
         return code, current_task, history
@@ -190,7 +195,7 @@ class AutoPCFast:
                 if_screenshot=if_screenshot)
 
             code, state = critic_output # if correction, code is not "", else code is ""
-            # state: critic, next
+            # state: critic, next, rethinking
             if state == '<Next>':
                 self.update_history(
                     history=self.history,
@@ -201,6 +206,21 @@ class AutoPCFast:
                 )
 
                 return code, state, current_task
+            elif state == '<Rethink>':
+                # 新增：处理重新思考状态
+                print(f"🔄 进入重新思考模式，当前任务: {current_task}")
+                # 重新思考后，继续执行
+                state = '<Continue>'
+                # 更新历史记录
+                self.update_history(
+                    history=self.history,
+                    code=code,
+                    state="<Rethink>",
+                    current_task=current_task,
+                    screenshot_path=screenshot_path
+                )
+                # 继续执行流程
+                continue
             
         # Update history
         self.update_history(
@@ -238,7 +258,7 @@ class AutoPCFast:
                     "task": (
                         current_task
                         if isinstance(current_task, str)
-                        else current_task.name
+                        else (current_task.get('name') if isinstance(current_task, dict) else (current_task.name if current_task else str(current_task)))
                     ),
                     "code": [code],
                     "gui": [gui],

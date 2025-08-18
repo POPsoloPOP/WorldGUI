@@ -29,6 +29,8 @@ This tool can critiquing the completion of the current task.
         self.critic_software_tips = self.load_software_tips("resources\critic_software_tips")
         self.software_tips = self.load_software_tips()
         
+        # 新增：上下文变化检测器
+        self.context_change_detector = ContextChangeDetector()
 
     def __call__(self,
                 current_task,
@@ -65,6 +67,20 @@ This tool can critiquing the completion of the current task.
         critic_tips = self.get_software_tips(self.critic_software_tips, software_name.lower())
         tips = self.get_software_tips(self.software_tips, software_name.lower())
 
+        # 新增：检测上下文变化
+        context_changes = self.detect_context_changes(screenshot_path, current_task)
+        
+        # 新增：判断是否需要重新思考
+        if context_changes and self.should_rethink_task(context_changes, current_task):
+            return self.trigger_dynamic_rethinking(
+                context_changes=context_changes,
+                current_task=current_task,
+                parsed_screenshot=parsed_screenshot,
+                screenshot_path=screenshot_path,
+                software_name=software_name,
+                tips=tips
+            )
+
         critic_prompt = self.construct_critic_prompt(software_name, current_task_text, current_action, compressed_gui, critic_tips, screenshot_path)
 
         # Prepare the action code based on the current task.
@@ -75,7 +91,7 @@ This tool can critiquing the completion of the current task.
             
             ## locate the gui info
 
-            if compress_gui:
+            if compressed_gui:
                 reffered_gui = self.locate_gui_info(compressed_gui, main_goal, current_task_text)
             else:
                 reffered_gui = ""
@@ -390,5 +406,399 @@ str(Explain how to fix the previous mistake based on the feedback. Provide a con
     def get_software_tips(self, target, software_name):        
         hints = "\n".join(target.get(software_name, [""]))
         return hints
+    
+    # 新增：检测上下文变化方法
+    def detect_context_changes(self, screenshot_path, current_task):
+        """检测界面上下文变化，包括弹框、右键菜单等"""
+        print(f"🔍 开始检测上下文变化...")
+        print(f"   screenshot_path类型: {type(screenshot_path)}")
+        print(f"   screenshot_path内容: {screenshot_path}")
+        
+        if not screenshot_path:
+            print("   ❌ screenshot_path为空")
+            return None
+            
+        # 处理不同的截图路径格式
+        if isinstance(screenshot_path, list):
+            if len(screenshot_path) < 2:
+                print(f"   ❌ screenshot_path列表长度不足: {len(screenshot_path)}")
+                return None
+            before_path = screenshot_path[0]
+            after_path = screenshot_path[1]
+        elif isinstance(screenshot_path, str):
+            print(f"   ⚠️  screenshot_path是字符串，无法进行对比检测")
+            return None
+        else:
+            print(f"   ❌ screenshot_path格式不支持: {type(screenshot_path)}")
+            return None
+            
+        print(f"   📸 操作前截图: {before_path}")
+        print(f"   📸 操作后截图: {after_path}")
+        
+        # 检查文件是否存在
+        if not os.path.exists(before_path):
+            print(f"   ❌ 操作前截图不存在: {before_path}")
+            return None
+        if not os.path.exists(after_path):
+            print(f"   ❌ 操作后截图不存在: {after_path}")
+            return None
+            
+        try:
+            # 使用上下文变化检测器分析截图
+            context_changes = self.context_change_detector.detect_changes(
+                before_path,  # 操作前截图
+                after_path,   # 操作后截图
+                current_task
+            )
+            
+            print(f"   📊 检测结果: {context_changes}")
+            return context_changes
+            
+        except Exception as e:
+            print(f"   ❌ Context change detection error: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    # 新增：判断是否需要重新思考
+    def should_rethink_task(self, context_changes, current_task):
+        """判断是否需要重新思考任务"""
+        if not context_changes:
+            return False
+            
+        # 检测到弹框且任务不期望弹框
+        if context_changes.get('dialog_appeared') and not getattr(current_task, 'expects_dialog', False):
+            return True
+            
+        # 检测到界面状态意外变化
+        if context_changes.get('unexpected_interface_change'):
+            return True
+            
+        return False
+
+    # 新增：触发动态重新思考
+    def trigger_dynamic_rethinking(self, context_changes, current_task, parsed_screenshot, screenshot_path, software_name, tips):
+        """当检测到上下文变化时，触发动态重新思考"""
+        print(f"🔄 检测到上下文变化，触发重新思考: {context_changes}")
+        
+        # 分析当前界面状态
+        current_gui_state = self.analyze_current_interface(parsed_screenshot, screenshot_path)
+        
+        # 识别新的操作机会
+        new_opportunities = self.identify_new_opportunities(current_gui_state, context_changes)
+        
+        # 重新生成任务计划
+        revised_task_plan = self.regenerate_task_plan(
+            original_task=current_task,
+            new_context=current_gui_state,
+            context_changes=context_changes,
+            new_opportunities=new_opportunities
+        )
+        
+        # 生成新的执行代码
+        new_code = self.generate_adaptive_code(
+            revised_task_plan=revised_task_plan,
+            current_context=current_gui_state,
+            software_name=software_name,
+            tips=tips
+        )
+        
+        return new_code, "<Rethink>"
+
+    # 新增：分析当前界面状态
+    def analyze_current_interface(self, parsed_screenshot, screenshot_path):
+        """分析当前界面状态"""
+        if parsed_screenshot:
+            return self.compress_and_format_gui(parsed_screenshot)
+        return ""
+
+    # 新增：识别新的操作机会
+    def identify_new_opportunities(self, current_gui_state, context_changes):
+        """基于上下文变化识别新的操作机会"""
+        opportunities = []
+        
+        if context_changes.get('dialog_appeared'):
+            opportunities.append({
+                'type': 'dialog_interaction',
+                'description': '需要与弹框进行交互',
+                'priority': 'high'
+            })
+            
+        return opportunities
+
+    # 新增：重新生成任务计划
+    def regenerate_task_plan(self, original_task, new_context, context_changes, new_opportunities):
+        """基于新上下文重新生成任务计划"""
+        # 这里可以根据具体需求实现任务计划的重新生成
+        # 目前返回一个简化的计划结构
+        return {
+            'original_task': original_task.name if hasattr(original_task, 'name') else str(original_task),
+            'context_changes': context_changes,
+            'new_opportunities': new_opportunities,
+            'adapted_plan': f"基于上下文变化调整的任务计划: {context_changes}"
+        }
+
+    # 新增：生成自适应代码
+    def generate_adaptive_code(self, revised_task_plan, current_context, software_name, tips):
+        """生成适应新上下文的执行代码"""
+        adaptive_prompt = f"""
+基于检测到的上下文变化，需要重新生成执行代码。
+
+当前上下文变化: {revised_task_plan['context_changes']}
+新的操作机会: {revised_task_plan['new_opportunities']}
+软件名称: {software_name}
+
+请生成适应新上下文的执行代码，处理以下情况：
+1. 如果检测到弹框，请生成与弹框交互的代码
+2. 如果检测到界面状态意外变化，请生成相应的恢复代码
+
+软件使用提示:
+{tips}
+
+请输出Python代码：
+"""
+        
+        try:
+            code = run_lmm(adaptive_prompt, lmm=self.lmm, max_tokens=1000, temperature=0)
+            return self.extract_code(code)
+        except Exception as e:
+            print(f"Adaptive code generation error: {e}")
+            return "# 重新思考后生成的代码\npass"
+    
+    
+
+class ContextChangeDetector:
+    """检测界面上下文变化的检测器"""
+    
+    def __init__(self):
+        self.change_types = {
+            'dialog_appearance': DialogChangeDetector(),
+            'interface_state_change': InterfaceStateDetector()
+        }
+    
+    def detect_changes(self, screenshot_before, screenshot_after, current_task):
+        """检测两个截图之间的上下文变化"""
+        changes = {}
+        
+        try:
+            # 检测弹框出现
+            if self.change_types['dialog_appearance'].detect(screenshot_before, screenshot_after):
+                changes['dialog_appeared'] = True
+                changes['dialog_type'] = self.change_types['dialog_appearance'].get_dialog_type()
+            
+            # 检测界面状态变化
+            if self.change_types['interface_state_change'].detect(screenshot_before, screenshot_after):
+                changes['unexpected_interface_change'] = True
+                changes['change_description'] = self.change_types['interface_state_change'].get_change_description()
+                
+        except Exception as e:
+            print(f"Context change detection error: {e}")
+            changes['detection_error'] = str(e)
+        
+        return changes
+
+
+class DialogChangeDetector:
+    """弹框变化检测器 - 纯图像对比版本"""
+    
+    def __init__(self):
+        self.min_dialog_area = 2000  # 最小弹框面积
+        self.max_dialog_area = 100000  # 最大弹框面积
+        self.central_region_margin = 0.15  # 中央区域边距
+    
+    def detect(self, screenshot_before, screenshot_after):
+        """检测弹框是否出现"""
+        print(f"      🔍 弹框检测器开始工作...")
+        print(f"        操作前截图: {screenshot_before}")
+        print(f"        操作后截图: {screenshot_after}")
+        
+        try:
+            import cv2
+            import numpy as np
+        except ImportError:
+            print("         ❌ 警告: 缺少OpenCV库，弹框检测功能受限")
+            return False
+        
+        try:
+            # 如果只有一个截图，无法检测变化
+            if not screenshot_before or not screenshot_after:
+                print("         ❌ 截图路径为空")
+                return False
+            
+            # 使用图像对比检测弹框
+            result = self._detect_from_comparison(screenshot_before, screenshot_after)
+            print(f"         📊 弹框检测结果: {result}")
+            return result
+            
+        except Exception as e:
+            print(f"         ❌ 弹框检测出错: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def _detect_from_comparison(self, screenshot_before, screenshot_after):
+        """通过比较两个截图检测弹框"""
+        print(f"         🔍 开始图像对比检测...")
+        
+        try:
+            # 读取两个图像
+            img1 = cv2.imread(screenshot_before)
+            img2 = cv2.imread(screenshot_after)
+            
+            if img1 is None or img2 is None:
+                print(f"            ❌ 无法读取图像文件")
+                return False
+            
+            print(f"            📐 图像1尺寸: {img1.shape}")
+            print(f"            📐 图像2尺寸: {img2.shape}")
+            
+            # 转换为灰度图
+            gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+            gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+            
+            # 确保两个图像尺寸一致
+            if img1.shape != img2.shape:
+                print(f"            🔄 图像尺寸不一致，正在调整...")
+                img2 = cv2.resize(img2, (img1.shape[1], img1.shape[0]))
+                gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+                print(f"            ✅ 图像尺寸已调整")
+            
+            # 计算图像差异
+            diff = cv2.absdiff(gray1, gray2)
+            
+            # 应用阈值，突出变化区域
+            _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+            
+            # 形态学操作，连接分散的变化区域
+            kernel = np.ones((3,3), np.uint8)
+            thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+            thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
+            
+            # 找到变化区域的轮廓
+            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            print(f"            🔍 找到 {len(contours)} 个变化区域")
+            
+            # 检查是否有符合弹框特征的变化区域
+            for i, contour in enumerate(contours):
+                area = cv2.contourArea(contour)
+                print(f"            📊 区域 {i+1}: 面积 = {area}")
+                
+                # 面积过滤：弹框通常有合适的大小
+                if area < self.min_dialog_area or area > self.max_dialog_area:
+                    print(f"               ❌ 面积不符合要求 ({self.min_dialog_area} < {area} < {self.max_dialog_area})")
+                    continue
+                
+                # 获取边界矩形
+                x, y, w, h = cv2.boundingRect(contour)
+                height, width = img2.shape[:2]
+                
+                print(f"               📐 位置: ({x}, {y}), 尺寸: {w} x {h}")
+                print(f"               📐 屏幕尺寸: {width} x {height}")
+                
+                # 位置过滤：弹框通常在屏幕中央，不在边缘
+                margin = self.central_region_margin
+                margin_pixels_x = int(width * margin)
+                margin_pixels_y = int(height * margin)
+                
+                if (x > margin_pixels_x and y > margin_pixels_y and 
+                    x + w < width - margin_pixels_x and y + h < height - margin_pixels_y):
+                    
+                    print(f"               ✅ 位置符合中央区域要求")
+                    
+                    # 形状过滤：弹框通常是矩形
+                    aspect_ratio = w / h
+                    if 0.5 <= aspect_ratio <= 3.0:  # 合理的宽高比
+                        print(f"               ✅ 宽高比符合要求: {aspect_ratio:.2f}")
+                        
+                        # 检查轮廓的矩形度
+                        rect_area = w * h
+                        contour_area = area
+                        rectangularity = contour_area / rect_area
+                        
+                        if rectangularity > 0.7:  # 轮廓接近矩形
+                            print(f"               ✅ 矩形度符合要求: {rectangularity:.2f}")
+                            print(f"               🎉 检测到弹框！")
+                            return True
+                        else:
+                            print(f"               ❌ 矩形度不符合要求: {rectangularity:.2f}")
+                    else:
+                        print(f"               ❌ 宽高比不符合要求: {aspect_ratio:.2f}")
+                else:
+                    print(f"               ❌ 位置不在中央区域")
+            
+            print(f"            ❌ 未检测到符合要求的弹框")
+            return False
+            
+        except Exception as e:
+            print(f"            ❌ 对比检测弹框出错: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def get_dialog_type(self):
+        """获取弹框类型 - 基于图像特征推测"""
+        return "detected_dialog"
+
+
+class InterfaceStateDetector:
+    """界面状态变化检测器"""
+    
+    def __init__(self):
+        self.change_threshold = 0.1  # 变化阈值
+    
+    def detect(self, screenshot_before, screenshot_after):
+        """检测界面状态是否发生意外变化"""
+        try:
+            import cv2
+            import numpy as np
+            from skimage.metrics import structural_similarity as ssim
+        except ImportError:
+            print("警告: 缺少图像处理库，界面状态检测功能受限")
+            return False
+        
+        try:
+            # 如果只有一个截图，无法检测变化
+            if not screenshot_before or not screenshot_after:
+                return False
+            
+            # 读取两个图像
+            img1 = cv2.imread(screenshot_before)
+            img2 = cv2.imread(screenshot_after)
+            
+            if img1 is None or img2 is None:
+                return False
+            
+            # 确保两个图像尺寸一致
+            if img1.shape != img2.shape:
+                img2 = cv2.resize(img2, (img1.shape[1], img1.shape[0]))
+            
+            # 转换为灰度图
+            gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+            gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+            
+            # 使用SSIM计算结构相似性
+            ssim_score = ssim(gray1, gray2)
+            
+            # 如果相似度低于阈值，说明发生了显著变化
+            if ssim_score < (1 - self.change_threshold):
+                return True
+            
+            # 也可以使用简单的像素差异检测
+            diff = cv2.absdiff(gray1, gray2)
+            mean_diff = np.mean(diff)
+            
+            # 如果平均差异超过阈值，也认为发生了变化
+            if mean_diff > 20:  # 像素值差异阈值
+                return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"界面状态检测出错: {e}")
+            return False
+    
+    def get_change_description(self):
+        """获取变化描述"""
+        return "interface_state_changed"
     
     

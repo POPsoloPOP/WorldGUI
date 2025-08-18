@@ -118,18 +118,50 @@ Invoke command: lmm_actor(query, visual[i])
         if isinstance(current_task, str):
             return "", "", f"Current Task: {current_task}", ""
         
-        main_goal = f"Main Goal: {current_task.parent.name}"
+        # 处理current_task为字典的情况
+        if isinstance(current_task, dict):
+            # 如果是字典，尝试获取name属性
+            task_name = current_task.get('name', str(current_task))
+            current_task_text = f"Current Task: {task_name}"
+            
+            # 对于字典格式，我们无法获取parent和next信息
+            main_goal = f"Main Goal: {task_name}"
+            finished_task = "Previous Finished Tasks: N/A"
+            next_task = "Next Task: N/A"
+            
+            return main_goal, finished_task, current_task_text, next_task
         
-        summarized_history = self.get_code_history_for_current_task(history)
-        finished_task = '\n'.join(summarized_history['finished_tasks'])
-        finished_task = f"Previous Finished Tasks: {finished_task}"
-        
-        next_task = current_task.next().name if current_task.next() else "No more tasks"
-        next_task = f"Next Task (for reference, you only need to complete the current task): {next_task}"
-                
-        current_task_text = f"Current Task: {current_task.name}"
-        
-        return main_goal, finished_task, current_task_text, next_task
+        # 处理current_task为对象的情况
+        try:
+            # 尝试获取parent.name
+            if hasattr(current_task, 'parent') and current_task.parent:
+                main_goal = f"Main Goal: {current_task.parent.name}"
+            else:
+                main_goal = f"Main Goal: {getattr(current_task, 'name', 'Unknown Task')}"
+            
+            summarized_history = self.get_code_history_for_current_task(history)
+            finished_task = '\n'.join(summarized_history['finished_tasks'])
+            finished_task = f"Previous Finished Tasks: {finished_task}"
+            
+            # 尝试获取next任务
+            if hasattr(current_task, 'next') and callable(current_task.next):
+                next_task_obj = current_task.next()
+                if next_task_obj and hasattr(next_task_obj, 'name'):
+                    next_task = f"Next Task (for reference, you only need to complete the current task): {next_task_obj.name}"
+                else:
+                    next_task = "Next Task (for reference, you only need to complete the current task): No more tasks"
+            else:
+                next_task = "Next Task (for reference, you only need to complete the current task): N/A"
+                    
+            current_task_text = f"Current Task: {getattr(current_task, 'name', 'Unknown Task')}"
+            
+            return main_goal, finished_task, current_task_text, next_task
+            
+        except Exception as e:
+            # 如果出现任何错误，返回安全的默认值
+            print(f"Warning: Error in get_task_details: {e}")
+            task_name = getattr(current_task, 'name', str(current_task))
+            return f"Main Goal: {task_name}", "Previous Finished Tasks: N/A", f"Current Task: {task_name}", "Next Task: N/A"
 
     def construct_prompt(
         self, 
@@ -211,13 +243,17 @@ Please give your reasoning steps...
     @staticmethod
     def check_resume(history):
         if history:
-            history_code = "\n".join(history[-1]['code']) if history[-1]['code'][0] else "# finish"
-            if "# finish" in history_code:
-                return False
+            # 检查history[-1]['code']是否存在且不为空
+            if 'code' in history[-1] and history[-1]['code']:
+                history_code = "\n".join(history[-1]['code'])
+                if "# finish" in history_code:
+                    return False
+                else:
+                    return True
             else:
-                return True
+                return False
         else:
-            "# finish"
+            return False
 
     def get_code_history_for_current_task(self, history):
         # keep previous four steps
@@ -225,10 +261,27 @@ Please give your reasoning steps...
         if history:
             if self.check_resume(history):
                 # select self.history from -5 index to -1 index, needs to check length
-                finished_tasks = [x['task'] for x in history[-5:-1]]
-                code = "\n".join(history[-1]['code'])
+                try:
+                    # 安全地获取历史任务
+                    start_idx = max(-5, -len(history))
+                    end_idx = -1
+                    finished_tasks = [x.get('task', 'Unknown Task') for x in history[start_idx:end_idx] if x.get('task')]
+                    
+                    # 安全地获取代码
+                    if 'code' in history[-1] and history[-1]['code']:
+                        code = "\n".join(history[-1]['code'])
+                except Exception as e:
+                    print(f"Warning: Error in get_code_history_for_current_task: {e}")
+                    finished_tasks = []
+                    code = ""
             else:
-                finished_tasks = [x['task'] for x in history[-4:]]
+                try:
+                    # 安全地获取历史任务
+                    start_idx = max(-4, -len(history))
+                    finished_tasks = [x.get('task', 'Unknown Task') for x in history[start_idx:] if x.get('task')]
+                except Exception as e:
+                    print(f"Warning: Error in get_code_history_for_current_task: {e}")
+                    finished_tasks = []
 
         return {"finished_tasks": finished_tasks, "code": code}
     
