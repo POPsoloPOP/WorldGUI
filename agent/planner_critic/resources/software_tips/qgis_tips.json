@@ -1,10 +1,13 @@
 {
     "qgis": [
+        "IMPORTANT: In QGIS, only elements with BLUE highlighting are considered truly selected. When determining if a task is completed, you must verify that the target element displays a clear BLUE highlight. If the target element does not show BLUE highlighting, the task is NOT completed and requires clicking to ensure proper selection.",
+        "When checking task completion status, look specifically for BLUE highlighting on the target element. Other colors or visual indicators are not sufficient to determine selection status.",
+        "Before marking a task as <Finished>, ensure the target element has a distinct BLUE highlight that clearly indicates it is selected.",
         "When executing tasks, do not over-guess or infer the positions of GUI elements. Always perform clicks and operations strictly based on the actual positions detected from the GUI capture.",
         "do not use the icon in toolbar to add layers, always use the Browser panel to add layers.",
         "Geographic data is always in the BYXG-OUTPUT folder, so we should always need to nagivate to the BYXG-OUTPUT folder to add layers.",
         "When searching for and adding layer resources, always locate the target folder or disk (e.g., G: drive) from the Browser panel. Do not use the toolbar or other menu tools to add layers.",
-        "When starting a new task in QGIS, clear all data in the Layers panel to ensure that newly added geographic data can be correctly located and displayed. Right-click each layer, select 'Remove Layer…', and wait for the dialog to appear,use GUI parser to get the position of the 'OK' button and then click the 'OK' button to confirm.",
+        "When starting a new task in QGIS, clear all data in the Layers panel to ensure that newly added geographic data can be correctly located and displayed. Click on each layer to select it, then click the 'Remove Layer' button and wait for the dialog to appear,use GUI parser to get the position of the 'OK' button and then click the 'OK' button to confirm.",
         "When you need to add the OpenStreetMap (OSM) basemap, do not use the Web menu or any plugins. Instead, directly locate 'OpenStreetMap' in the Browser panel and drag it into the Layers panel to add it.",
         "When adding a new layer from the Browser panel, always prefer to use drag-and-drop into the Layers panel rather than right-clicking to add.",
         "If a layer already exists in the Layers panel and you need to adjust its order, use right-click and select 'Move to Top' or 'Move to Bottom' as appropriate.",
@@ -14,6 +17,16 @@
         "To save changes, use 'Save Layer Edits' button, not Ctrl+S.",
         "When using the attribute table, click on the row number to select entire rows.",
         "For spatial operations, use the Processing Toolbox rather than individual tools.",
-        "When creating new features, use the digitizing toolbar buttons, not keyboard shortcuts."
+        "When creating new features, use the digitizing toolbar buttons, not keyboard shortcuts.",
+        "When using the Autonomous GIS tool in QGIS, for setting the output directory, do not click the '...' browse button next to the Output directory field. Instead, directly type the target file path into the Output directory input box. This ensures more precise control over the output location and avoids potential navigation issues in the file browser dialog.",
+        "If the Layer Styling panel is not detected but the task requires modifying styles, click the 'Styling Panel' button in the Layers panel to open the Layer Styling panel.",
+        "If the Layer Styling panel is already detected and you need to switch the style target, simply click on the target data layer - no need to right-click to find properties.",
+        "To expand folders in the Browser panel, use double-click instead of right-click. Double-clicking on a folder will expand it to show its contents.",
+        "When modifying symbol layer type in the Layer Styling panel, the target symbol layer is typically located in the second row of the symbol layers list. Click on the symbol layer item (which may be named 'Filled Line', 'Simple Line', 'Marker', etc.) to select it before changing its type. The exact name depends on the current layer's style configuration.",
+        "When clicking on dropdown menus or combo boxes in QGIS, always wait for the dropdown options to appear before proceeding to the next step. This ensures the interface elements are fully loaded and prevents clicking on non-existent options.",
+        "When working with Symbol Layers List in the Layer Styling panel, do not directly search for or click on target symbol layer names. Instead, locate the search bar within the Symbol Layers List section and click on it to access the dropdown menu. The search bar allows you to filter and select the desired symbol layer type from the available options.",
+        "When modifying styles for a layer, you only need to single-click on the layer element in the Layers panel - no double-click is required. However, always remember to confirm the highlighting state to ensure the layer is properly selected.",
+        "When modifying style properties, do not click on the text labels or descriptions. Instead, click on the search bar or dropdown field that corresponds to the specific style property you want to modify. This ensures you're interacting with the correct input element.",
+        "When modifying style properties in QGIS, the text labels (such as 'Symbol layer type', 'Color', 'Width', etc.) are just descriptive labels and cannot be clicked for interaction. Instead, you should click on the search bar or dropdown field that belongs to and corresponds to that specific property. For example, 'Symbol layer type' is the property name, but the actual interactive element is its associated search bar/dropdown field."
     ]
 }

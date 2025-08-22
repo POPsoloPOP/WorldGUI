@@ -123,43 +123,99 @@ def is_two_dimensional(lst):
 # 单独的按Y轴（垂直位置）排序的函数
 def sort_elements_by_y(lst):
     try:
-        return sorted(lst, key=lambda x: x['rectangle'][1])
-    except:
-        return sorted(lst, key=lambda x: x['position'][1])
+        # 首先尝试使用rectangle字段
+        if lst and isinstance(lst[0], dict) and 'rectangle' in lst[0]:
+            return sorted(lst, key=lambda x: x.get('rectangle', [0, 0, 0, 0])[1] if isinstance(x.get('rectangle'), list) and len(x.get('rectangle', [])) > 1 else 0)
+        # 然后尝试使用position字段
+        elif lst and isinstance(lst[0], dict) and 'position' in lst[0]:
+            return sorted(lst, key=lambda x: x.get('position', [0, 0])[1] if isinstance(x.get('position'), list) and len(x.get('position', [])) > 1 else 0)
+        else:
+            # 如果都没有，返回原列表
+            return lst
+    except (KeyError, IndexError, TypeError, AttributeError) as e:
+        print(f"Y轴排序失败: {e}，返回原列表")
+        return lst
 
 # 单独的按X轴（水平位置）排序的函数
 def sort_elements_by_x(lst):
     try:
-        return sorted(lst, key=lambda x: x['rectangle'][0])
-    except:
-        return sorted(lst, key=lambda x: x['position'][0])
+        # 首先尝试使用rectangle字段
+        if lst and isinstance(lst[0], dict) and 'rectangle' in lst[0]:
+            return sorted(lst, key=lambda x: x.get('rectangle', [0, 0, 0, 0])[0] if isinstance(x.get('rectangle'), list) and len(x.get('rectangle', [])) > 0 else 0)
+        # 然后尝试使用position字段
+        elif lst and isinstance(lst[0], dict) and 'position' in lst[0]:
+            return sorted(lst, key=lambda x: x.get('position', [0, 0])[0] if isinstance(x.get('position'), list) and len(x.get('position', [])) > 0 else 0)
+        else:
+            # 如果都没有，返回原列表
+            return lst
+    except (KeyError, IndexError, TypeError, AttributeError) as e:
+        print(f"X轴排序失败: {e}，返回原列表")
+        return lst
 
 # 综合排序函数，先按Y轴排序，然后对同一行的元素按X轴排序
 def sort_elements_by_xy(lst):
+    # 检查是否为嵌套列表结构
     if is_two_dimensional(lst):
         return lst
     
-    y_sorted = sort_elements_by_y(lst)  # 先按Y轴排序
-    grouped_sorted = []  # 分组后每组按X轴排序的结果
-    current_line = []  # 当前处理的行
-    line_threshold = 10  # Y轴上判定同一行的阈值
-
-    for item in y_sorted:
-        # 判断是否开启新的一行
-        if 'rectangle' in item:
-            key = 'rectangle'
-        else:
-            key = 'position'
+    # 检查列表是否为空或元素类型不正确
+    if not lst or not isinstance(lst[0], dict):
+        return lst
+    
+    try:
+        # 过滤掉无效的元素（没有rectangle或position字段的元素）
+        valid_elements = []
+        invalid_elements = []
         
-        if not current_line or abs(item[key][1] - current_line[-1][key][1]) <= line_threshold:
-            current_line.append(item)
-        else:
-            # 新行开始，先对当前行按X轴排序，再加入到最终结果
+        for item in lst:
+            if isinstance(item, dict) and ('rectangle' in item or 'position' in item):
+                # 检查rectangle字段是否有效
+                if 'rectangle' in item and isinstance(item['rectangle'], list) and len(item['rectangle']) >= 4:
+                    valid_elements.append(item)
+                elif 'position' in item and isinstance(item['position'], list) and len(item['position']) >= 2:
+                    valid_elements.append(item)
+                else:
+                    invalid_elements.append(item)
+            else:
+                invalid_elements.append(item)
+        
+        if not valid_elements:
+            return lst
+        
+        y_sorted = sort_elements_by_y(valid_elements)  # 先按Y轴排序
+        grouped_sorted = []  # 分组后每组按X轴排序的结果
+        current_line = []  # 当前处理的行
+        line_threshold = 10  # Y轴上判定同一行的阈值
+
+        for item in y_sorted:
+            # 判断是否开启新的一行
+            if 'rectangle' in item and isinstance(item.get('rectangle'), list) and len(item.get('rectangle', [])) > 1:
+                key = 'rectangle'
+                y_coord = item[key][1]
+            elif 'position' in item and isinstance(item.get('position'), list) and len(item.get('position', [])) > 1:
+                key = 'position'
+                y_coord = item[key][1]
+            else:
+                # 如果都没有，跳过这个元素
+                continue
+            
+            if not current_line or abs(y_coord - current_line[-1].get(key, [0, 0])[1]) <= line_threshold:
+                current_line.append(item)
+            else:
+                # 新行开始，先对当前行按X轴排序，再加入到最终结果
+                grouped_sorted.append(sort_elements_by_x(current_line))
+                current_line = [item]  # 创建新行
+
+        # 处理最后一行
+        if current_line:
             grouped_sorted.append(sort_elements_by_x(current_line))
-            current_line = [item]  # 创建新行
-
-    # 处理最后一行
-    if current_line:
-        grouped_sorted.append(sort_elements_by_x(current_line))
-
-    return grouped_sorted
+        
+        # 如果有无效元素，将它们添加到结果中（不排序）
+        if invalid_elements:
+            grouped_sorted.append(invalid_elements)
+        
+        return grouped_sorted
+        
+    except Exception as e:
+        print(f"综合排序失败: {e}，返回原列表")
+        return lst

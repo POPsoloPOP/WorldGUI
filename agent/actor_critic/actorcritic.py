@@ -5,6 +5,12 @@ import io
 import copy
 import json
 import glob
+import cv2
+import numpy as np
+try:
+    from skimage.metrics import structural_similarity as ssim
+except ImportError:
+    ssim = None
 from agent.actor.utils import format_gui, compress_gui
 from agent.utils.lmm.run_lmm import run_lmm
 
@@ -128,8 +134,15 @@ This tool can critiquing the completion of the current task.
         main_goal = f"Main Goal: {current_task.parent.name}"
         
         summarized_history = self.get_code_history_for_current_task(history)
-        finished_task = '\n'.join(summarized_history['finished_tasks'])
-        finished_task = f"Previous Finished Tasks: {finished_task}"
+        
+        # 过滤掉None值，确保所有元素都是字符串
+        finished_tasks_filtered = [task for task in summarized_history['finished_tasks'] if task is not None]
+        
+        if finished_tasks_filtered:
+            finished_task = '\n'.join(finished_tasks_filtered)
+            finished_task = f"Previous Finished Tasks: {finished_task}"
+        else:
+            finished_task = "Previous Finished Tasks: None"
         
         next_task = current_task.next().name if current_task.next() else "No more tasks"
         next_task = f"Next Task (for reference, you only need to complete the current task): {next_task}"
@@ -369,11 +382,15 @@ str(Explain how to fix the previous mistake based on the feedback. Provide a con
 
     @staticmethod
     def check_resume(history):
-        history_code = "\n".join(history[-1]['code']) if history else "# finish"
-        if "# finish" in history_code:
-            return False
-        else:
-            return True
+        if history and len(history) > 0:
+            last_history = history[-1]
+            if 'code' in last_history and last_history['code'] and len(last_history['code']) > 0:
+                history_code = "\n".join(last_history['code']) if last_history['code'][0] else "# finish"
+                if "# finish" in history_code:
+                    return False
+                else:
+                    return True
+        return False
 
     def get_code_history_for_current_task(self, history):
         # keep previous four steps
@@ -381,10 +398,14 @@ str(Explain how to fix the previous mistake based on the feedback. Provide a con
         if history:
             if self.check_resume(history):
                 # select self.history from -5 index to -1 index, needs to check length
-                finished_tasks = [x['task'] for x in history[-5:-1]]
-                code = "\n".join(history[-1]['code'])
+                finished_tasks = [x['task'] for x in history[-5:-1] if x.get('task') is not None]
+                # 安全地获取code字段
+                if len(history) > 0 and 'code' in history[-1] and history[-1]['code']:
+                    code = "\n".join(history[-1]['code'])
+                else:
+                    code = ""
             else:
-                finished_tasks = [x['task'] for x in history[-4:]]
+                finished_tasks = [x['task'] for x in history[-4:] if x.get('task') is not None]
         return {"finished_tasks": finished_tasks, "code": code}
 
     def get_last_screenshot(self, history):
@@ -602,9 +623,11 @@ class DialogChangeDetector:
     """弹框变化检测器 - 纯图像对比版本"""
     
     def __init__(self):
-        self.min_dialog_area = 2000  # 最小弹框面积
-        self.max_dialog_area = 100000  # 最大弹框面积
-        self.central_region_margin = 0.15  # 中央区域边距
+        # 松缓面积限制：降低最小面积，提高最大面积
+        self.min_dialog_area = 500  # 最小弹框面积：从2000降低到500
+        self.max_dialog_area = 200000  # 最大弹框面积：从100000提高到200000
+        # 松缓位置限制：扩大中央区域范围
+        self.central_region_margin = 0.05  # 中央区域边距：从0.15降低到0.05，扩大检测范围
     
     def detect(self, screenshot_before, screenshot_after):
         """检测弹框是否出现"""
@@ -612,12 +635,7 @@ class DialogChangeDetector:
         print(f"        操作前截图: {screenshot_before}")
         print(f"        操作后截图: {screenshot_after}")
         
-        try:
-            import cv2
-            import numpy as np
-        except ImportError:
-            print("         ❌ 警告: 缺少OpenCV库，弹框检测功能受限")
-            return False
+
         
         try:
             # 如果只有一个截图，无法检测变化
@@ -666,8 +684,8 @@ class DialogChangeDetector:
             # 计算图像差异
             diff = cv2.absdiff(gray1, gray2)
             
-            # 应用阈值，突出变化区域
-            _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+            # 应用阈值，突出变化区域 - 降低阈值，更容易检测到变化
+            _, thresh = cv2.threshold(diff, 20, 255, cv2.THRESH_BINARY)  # 从25降低到20
             
             # 形态学操作，连接分散的变化区域
             kernel = np.ones((3,3), np.uint8)
@@ -695,7 +713,7 @@ class DialogChangeDetector:
                 print(f"               📐 位置: ({x}, {y}), 尺寸: {w} x {h}")
                 print(f"               📐 屏幕尺寸: {width} x {height}")
                 
-                # 位置过滤：弹框通常在屏幕中央，不在边缘
+                # 位置过滤：弹框通常在屏幕中央，不在边缘 - 松缓位置限制
                 margin = self.central_region_margin
                 margin_pixels_x = int(width * margin)
                 margin_pixels_y = int(height * margin)
@@ -705,17 +723,17 @@ class DialogChangeDetector:
                     
                     print(f"               ✅ 位置符合中央区域要求")
                     
-                    # 形状过滤：弹框通常是矩形
+                    # 形状过滤：弹框通常是矩形 - 松缓宽高比限制
                     aspect_ratio = w / h
-                    if 0.5 <= aspect_ratio <= 3.0:  # 合理的宽高比
+                    if 0.3 <= aspect_ratio <= 5.0:  # 宽高比：从0.5-3.0放宽到0.3-5.0
                         print(f"               ✅ 宽高比符合要求: {aspect_ratio:.2f}")
                         
-                        # 检查轮廓的矩形度
+                        # 检查轮廓的矩形度 - 松缓矩形度限制
                         rect_area = w * h
                         contour_area = area
                         rectangularity = contour_area / rect_area
                         
-                        if rectangularity > 0.7:  # 轮廓接近矩形
+                        if rectangularity > 0.5:  # 矩形度：从0.7降低到0.5
                             print(f"               ✅ 矩形度符合要求: {rectangularity:.2f}")
                             print(f"               🎉 检测到弹框！")
                             return True
@@ -748,13 +766,7 @@ class InterfaceStateDetector:
     
     def detect(self, screenshot_before, screenshot_after):
         """检测界面状态是否发生意外变化"""
-        try:
-            import cv2
-            import numpy as np
-            from skimage.metrics import structural_similarity as ssim
-        except ImportError:
-            print("警告: 缺少图像处理库，界面状态检测功能受限")
-            return False
+
         
         try:
             # 如果只有一个截图，无法检测变化
@@ -776,12 +788,13 @@ class InterfaceStateDetector:
             gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
             gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
             
-            # 使用SSIM计算结构相似性
-            ssim_score = ssim(gray1, gray2)
-            
-            # 如果相似度低于阈值，说明发生了显著变化
-            if ssim_score < (1 - self.change_threshold):
-                return True
+            # 使用SSIM计算结构相似性（如果可用）
+            if ssim is not None:
+                ssim_score = ssim(gray1, gray2)
+                
+                # 如果相似度低于阈值，说明发生了显著变化
+                if ssim_score < (1 - self.change_threshold):
+                    return True
             
             # 也可以使用简单的像素差异检测
             diff = cv2.absdiff(gray1, gray2)

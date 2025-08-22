@@ -1,0 +1,25 @@
+{
+  "base_resolution": [1920, 1080],
+  "timestamp": "2025-01-20 12:00:00",
+  "software": "QGIS",
+  "coordinates": [
+    {
+      "name": "Write your data request here.",
+      "position": [
+        1612,
+        867
+      ],
+      "x": 1612,
+      "y": 867
+    },
+    {
+      "name": "output directory",
+      "position": [
+        1570,
+        944
+      ],
+      "x": 1570,
+      "y": 944
+    }
+  ]
+}

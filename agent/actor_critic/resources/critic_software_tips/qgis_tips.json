@@ -8,6 +8,9 @@
         "When a folder in the Browser panel is expanded, the arrow icon next to the folder points downward. This indicates the folder is open and its contents are visible. To verify that the operation of expanding a folder is completed, check if the arrow icon next to the target folder has changed from pointing right to pointing down, and the subfiles or subfolders are displayed under the folder.",
         "After dragging a file from the Browser panel to the Layers panel, the file should appear as a new layer in the Layers panel. If the layer appears, the drag-and-drop operation is considered successful.",
         "If the target file does not appear in the Layers panel after the drag-and-drop action, the operation should be considered incomplete.",
-        "When reviewing the operation, check that the file name is visible under the Layers panel after the drag-and-drop."
+        "When reviewing the operation, check that the file name is visible under the Layers panel after the drag-and-drop.",
+        "When modifying styles for a layer, you only need to single-click on the layer element in the Layers panel - no double-click is required. However, always remember to confirm the highlighting state to ensure the layer is properly selected.",
+        "When modifying style properties, do not click on the text labels or descriptions. Instead, click on the search bar or dropdown field that corresponds to the specific style property you want to modify. This ensures you're interacting with the correct input element.",
+        "When modifying style properties in QGIS, the text labels (such as 'Symbol layer type', 'Color', 'Width', etc.) are just descriptive labels and cannot be clicked for interaction. Instead, you should click on the search bar or dropdown field that belongs to and corresponds to that specific property. For example, 'Symbol layer type' is the property name, but the actual interactive element is its associated search bar/dropdown field."
     ]
 }
